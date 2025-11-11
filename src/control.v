@@ -238,7 +238,7 @@ module Control (
 
         target_sel    = 1'b1;
 
-        RF_LE         = 1'b1;
+        RF_LE         = (instr[4:0] != 5'd0) ? 1'b1 : 1'b0;
 
         rd            = instr[4:0];
 

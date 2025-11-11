@@ -12,6 +12,21 @@ module CPU (
 
   reg [31:0] pc_cur, npc_cur;
 
+  reg ex_is_call, ex_is_jmpl;
+  reg [4:0] ex_rd;
+  reg [31:0] ex_pc;
+
+  reg mem_link_we;
+  reg [4:0] mem_link_rd;
+  reg [31:0] mem_link_val;
+
+  reg wb_link_we;
+  reg [4:0] wb_link_rd;
+  reg [31:0] wb_link_val;
+
+  reg mem_is_call, mem_is_jmpl;
+  reg wb_is_call, wb_is_jmpl;
+
 
 
   wire [31:0] instr_IF;
@@ -80,15 +95,23 @@ module CPU (
 
   wire [31:0] rdata1, rdata2, wb_data;
 
+  wire [31:0] alu_y_WB, mem_rdata_WB; wire reg_write_WBs, mem_to_reg_WBs; wire [4:0] rd_WBs;
+  wire link_we_WBs; wire [4:0] link_rd_WBs; wire [31:0] link_val_WBs;
+  wire call_WBs, jmpl_WBs;
+
+  wire [4:0] waddr_final;
+  wire [31:0] wdata_final;
+  wire reg_write_final;
+
   RegFile rf (
 
     .clk(clk),
 
-    .we(RF_LE),
+    .we(reg_write_final),
 
-    .waddr(rd),
+    .waddr(waddr_final),
 
-    .wdata(wb_data),
+    .wdata(wdata_final),
 
     .raddr1(rs1),
 
@@ -133,6 +156,7 @@ module CPU (
   assign {alu_op_EXs, alu_src_EXs, branch_EXs, call_EXs, jmpl_EXs, rs1_EXs, rs2_EXs, rd_EXs, a_EXs, b_EXs, imm_EXs, branch_taken_EXs, npc_EXs, branch_EXs_delay, call_EXs_delay, jmpl_EXs_delay} = idex_out;
 
   wire [31:0] basePC_EX = npc_EXs - 32'd4;
+  wire [31:0] pc_EXs = basePC_EX;
 
   wire [31:0] call_target_EX = basePC_EX + (imm_EXs << 2);
 
@@ -143,6 +167,58 @@ module CPU (
   wire take_ctrl_EX = (jmpl_EXs) ? 1'b1 : ((call_EXs) ? 1'b1 : (branch_taken_EXs));
 
   wire [31:0] targetPC_EX = (jmpl_EXs) ? jmpl_target_EX : ((call_EXs) ? call_target_EX : branch_target_EX);
+
+  wire [31:0] pc_ID = npc_ID - 32'd4;
+
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      ex_is_call <= 1'b0;
+      ex_is_jmpl <= 1'b0;
+      ex_rd <= 5'd0;
+      ex_pc <= 32'd0;
+    end else begin
+      ex_is_call <= call_instruc;
+      ex_is_jmpl <= jumpl_intruct;
+      ex_rd <= rd;
+      ex_pc <= pc_EXs;
+    end
+  end
+
+  wire link_we_EX = ex_is_call || (ex_is_jmpl && (ex_rd != 5'd0));
+  wire [4:0] link_rd_EX = ex_is_call ? 5'd15 : ex_rd;
+  wire [31:0] link_val_EX = ex_pc + 32'd8;
+
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      mem_link_we <= 1'b0;
+      mem_link_rd <= 5'd0;
+      mem_link_val <= 32'd0;
+      mem_is_call <= 1'b0;
+      mem_is_jmpl <= 1'b0;
+    end else begin
+      mem_link_we <= link_we_EX;
+      mem_link_rd <= link_rd_EX;
+      mem_link_val <= link_val_EX;
+      mem_is_call <= ex_is_call;
+      mem_is_jmpl <= ex_is_jmpl;
+    end
+  end
+
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      wb_link_we <= 1'b0;
+      wb_link_rd <= 5'd0;
+      wb_link_val <= 32'd0;
+      wb_is_call <= 1'b0;
+      wb_is_jmpl <= 1'b0;
+    end else begin
+      wb_link_we <= mem_link_we;
+      wb_link_rd <= mem_link_rd;
+      wb_link_val <= mem_link_val;
+      wb_is_call <= mem_is_call;
+      wb_is_jmpl <= mem_is_jmpl;
+    end
+  end
 
   reg take_ctrl_r;
   reg [31:0] targetPC_r;
@@ -210,11 +286,20 @@ module CPU (
 
 
 
-  wire [31:0] alu_y_WB, mem_rdata_WB; wire reg_write_WBs, mem_to_reg_WBs; wire [4:0] rd_WBs;
-
   assign {alu_y_WB, mem_rdata_WB, reg_write_WBs, mem_to_reg_WBs, rd_WBs} = memwb_out;
 
-  assign wb_data = mem_to_reg_WBs ? mem_rdata_WB : alu_y_WB;
+  wire wb_norm_RegWrite = reg_write_WBs;
+  wire [4:0] wb_norm_rd = rd_WBs;
+  wire [31:0] wb_norm_wdata = mem_to_reg_WBs ? mem_rdata_WB : alu_y_WB;
+
+  wire wb_final_RegWrite = wb_link_we ? 1'b1 : wb_norm_RegWrite;
+  wire [4:0] wb_final_rd = wb_link_we ? wb_link_rd : wb_norm_rd;
+  wire [31:0] wb_final_wdata = wb_link_we ? wb_link_val : wb_norm_wdata;
+
+  assign reg_write_final = wb_final_RegWrite;
+  assign waddr_final = wb_final_rd;
+  assign wdata_final = wb_final_wdata;
+  assign wb_data = wb_final_wdata;
 
 
 
@@ -236,8 +321,11 @@ module CPU (
 
     $display("  MEM: MemRead=%b MemWrite=%b", mem_read_MEMs, mem_write_MEMs);
 
-    $display("  WB : RegWrite=%b MemToReg=%b", reg_write_WBs, mem_to_reg_WBs);
+  end
 
+  always @(*) begin
+    $display("WB : RegWrite=%0d rd=%0d WData=%08h [is_call=%0d is_jmpl=%0d]",
+             wb_final_RegWrite, wb_final_rd, wb_final_wdata, wb_is_call, wb_is_jmpl);
   end
 
 endmodule
