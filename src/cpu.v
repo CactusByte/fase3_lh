@@ -321,11 +321,9 @@ module CPU (
 
     $display("  MEM: MemRead=%b MemWrite=%b", mem_read_MEMs, mem_write_MEMs);
 
-  end
-
-  always @(*) begin
-    $display("WB : RegWrite=%0d rd=%0d WData=%08h [is_call=%0d is_jmpl=%0d]",
+    $display("  WB : RegWrite=%0d rd=%0d WData=%08h [is_call=%0d is_jmpl=%0d]",
              wb_final_RegWrite, wb_final_rd, wb_final_wdata, wb_is_call, wb_is_jmpl);
+
   end
 
 endmodule
