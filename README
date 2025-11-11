@@ -1,0 +1,3 @@
+iverilog -o cpu_test src/cpu.v src/control.v src/alu.v src/regfile.v src/dmem.v src/imem.v src/mux2.v src/pc.v src/npc.v src/pipe_reg.v tb.v
+
+vvp cpu_test

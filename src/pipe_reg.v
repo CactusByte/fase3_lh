@@ -1,10 +1,8 @@
-// pipe_reg.v
-
 module PipeReg #(parameter W=32) (
 
   input  wire        clk,
 
-  input  wire        reset,     // sincrónico
+  input  wire        reset,
 
   input  wire [W-1:0] din,
 
@@ -21,4 +19,3 @@ module PipeReg #(parameter W=32) (
   end
 
 endmodule
-

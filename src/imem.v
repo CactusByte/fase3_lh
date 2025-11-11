@@ -1,52 +1,52 @@
-// imem.v
-
 module I_MEM (
 
-  input  wire [31:0] addr,      // byte address; usaremos addr[31:2]
+  input  wire [31:0] addr,
 
   output wire [31:0] instr
 
 );
 
-  reg [31:0] rom [0:63]; // espacio pequeño para demo
+  reg [31:0] rom [0:127];
+
+  integer file, i;
+  reg [255:0] line;
+  reg [7:0] byte0, byte1, byte2, byte3;
 
   initial begin
 
-    // Cargar el segmento EXACTO del PDF (en orden, empezando en 0)
+    for (i = 0; i < 128; i = i + 1) begin
+      rom[i] = 32'd0;
+    end
 
-    rom[0]  = 32'b10001010_00000000_00000000_00000000; // add r0,r0,r5
-
-    rom[1]  = 32'b10000110_10100000_11100000_00000001; // subcc r3,1,r3
-
-    rom[2]  = 32'b11000100_00001000_00000000_00000001; // ldub [r0,r1],r2
-
-    rom[3]  = 32'b11001010_00101000_01100000_00000001; // stb r5,[r1,1]
-
-    rom[4]  = 32'b00010010_10111111_11111111_11111110; // bne -2
-
-    rom[5]  = 32'b00001011_00001111_00001111_00000110; // sethi #3F0F06, r5
-
-    rom[6]  = 32'b01000000_00000000_00000000_00000100; // call +4
-
-    rom[7]  = 32'b10000001_11000000_00000000_00001111; // jmpl r0,r15, r0
-
-    rom[8]  = 32'b10001010_00000000_00000000_00000000; // add r0,r0,r5
-
-    rom[9]  = 32'b10000110_10100000_11100000_00000001; // subcc r3,1,r3
-
-    rom[10] = 32'b11000100_00001000_00000000_00000001; // ldub [r0,r1],r2
-
-    rom[11] = 32'b00000000_00000000_00000000_00000000; // nop
-
-    rom[12] = 32'b00010010_10111111_11111111_11111110; // bne -2
-
-    // resto en 0
+    file = $fopen("preload/phaseIII_code_SPARC.txt", "r");
+    
+    if (file) begin
+      i = 0;
+      while (!$feof(file) && i < 128) begin
+        if ($fgets(line, file)) begin
+          if ($sscanf(line, "%8b %8b %8b %8b", byte0, byte1, byte2, byte3) == 4) begin
+            rom[i] = {byte0, byte1, byte2, byte3};
+            i = i + 1;
+          end
+        end
+      end
+      $fclose(file);
+      $display("Cargadas %0d instrucciones desde preload/phaseIII_code_SPARC.txt", i);
+      if (i == 0) begin
+        $display("ERROR: El archivo preload/phaseIII_code_SPARC.txt está vacío o no contiene instrucciones válidas");
+        $display("La simulación continuará con la ROM inicializada a 0");
+      end
+    end else begin
+      $display("ERROR CRÍTICO: No se pudo abrir el archivo preload/phaseIII_code_SPARC.txt");
+      $display("El archivo es OBLIGATORIO. Verifica que existe en la ruta correcta.");
+      $display("La simulación continuará con la ROM inicializada a 0 (instrucciones nop)");
+      $display("Esto puede causar comportamiento inesperado.");
+    end
 
   end
 
 
 
-  assign instr = rom[addr[31:2]]; // word-aligned
+  assign instr = rom[addr[31:2]];
 
 endmodule
-

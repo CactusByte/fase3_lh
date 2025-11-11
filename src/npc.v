@@ -1,10 +1,8 @@
-// npc.v
-
 module NPC (
 
   input  wire        clk,
 
-  input  wire        reset,   // sincrónico
+  input  wire        reset,
 
   input  wire        le,
 
@@ -16,11 +14,10 @@ module NPC (
 
   always @(posedge clk) begin
 
-    if (reset) npc <= 32'd4;     // requisito: nPC = 4 en reset
+    if (reset) npc <= 32'd4;
 
     else if (le) npc <= next_npc;
 
   end
 
 endmodule
-

@@ -1,5 +1,3 @@
-// dmem.v
-
 module D_MEM (
 
   input  wire        clk,
@@ -16,9 +14,7 @@ module D_MEM (
 
 );
 
-  reg [7:0] ram [0:255]; // bytes
-
-  // lectura de 32 bits little-endian
+  reg [7:0] ram [0:511];
 
   assign rdata = mem_read ? { ram[addr+3], ram[addr+2], ram[addr+1], ram[addr+0] } : 32'd0;
 
@@ -41,4 +37,3 @@ module D_MEM (
   end
 
 endmodule
-

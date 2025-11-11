@@ -1,5 +1,3 @@
-// cpu.v
-
 `define STR_FMT "%s"
 
 module CPU (
@@ -8,37 +6,19 @@ module CPU (
 
   input  wire reset,
 
-  input  wire S // señal del MUX externo (cambia a 1 en t=40)
+  input  wire S
 
 );
 
-  // PC / nPC con LE=1 siempre (puedes modular si quieres stalls)
-
-  wire [31:0] pc_cur, npc_cur;
-
-  wire [31:0] pc_plus4 = pc_cur + 32'd4;
-
-  wire [31:0] npc_next_seq = npc_cur + 32'd4;
-
-  wire [31:0] pc_next_mux; // Declarado aquí, asignado más adelante
+  reg [31:0] pc_cur, npc_cur;
 
 
-
-  PC  uPC  (.clk(clk), .reset(reset), .le(1'b1), .next_pc(pc_next_mux), .pc(pc_cur));
-
-  NPC uNPC (.clk(clk), .reset(reset), .le(1'b1), .next_npc(npc_next_seq), .npc(npc_cur));
-
-
-
-  // IF: instruction fetch
 
   wire [31:0] instr_IF;
 
   I_MEM imem (.addr(pc_cur), .instr(instr_IF));
 
 
-
-  // IF/ID
 
   wire [63:0] ifid_in  = {npc_cur, instr_IF};
 
@@ -52,20 +32,18 @@ module CPU (
 
 
 
-  // Control en ID
+  wire        call_instruc, ID_Branch_Instruc, ID_load_intruc;
+  wire [3:0]  SOH_S;
+  wire        RF_LE, RAM_R_W, RAM_Enable, jumpl_intruct, PSR_Enable, target_sel;
+  wire [3:0]  ID_ALU_op;
+  wire [1:0]  RAM_Size, Load_Call_jmpl;
+  wire        LE = 1'b1;
 
-  wire [3:0]  alu_op_EX;
-
-  wire        alu_src_EX, branch_EX, call_EX, jmpl_EX;
-
+  wire        alu_src_EX;
   wire        mem_read_MEM, mem_write_MEM;
-
-  wire        reg_write_WB, mem_to_reg_WB;
-
+  wire        mem_to_reg_WB;
   wire [31:0] imm_ext;
-
   wire [4:0]  rs1, rs2, rd;
-
   wire [79:0] keyword;
 
 
@@ -74,23 +52,31 @@ module CPU (
 
     .instr(instr_ID),
 
-    .alu_op_EX(alu_op_EX), .alu_src_EX(alu_src_EX),
+    .LE(LE),
 
-    .branch_EX(branch_EX), .call_EX(call_EX), .jmpl_EX(jmpl_EX),
+    .call_instruc(call_instruc),
+    .SOH_S(SOH_S),
+    .ID_Branch_Instruc(ID_Branch_Instruc),
+    .ID_ALU_op(ID_ALU_op),
+    .ID_load_intruc(ID_load_intruc),
+    .RF_LE(RF_LE),
+    .RAM_Size(RAM_Size),
+    .RAM_R_W(RAM_R_W),
+    .RAM_Enable(RAM_Enable),
+    .jumpl_intruct(jumpl_intruct),
+    .PSR_Enable(PSR_Enable),
+    .Load_Call_jmpl(Load_Call_jmpl),
+    .target_sel(target_sel),
 
+    .alu_src_EX(alu_src_EX),
     .mem_read_MEM(mem_read_MEM), .mem_write_MEM(mem_write_MEM),
-
-    .reg_write_WB(reg_write_WB), .mem_to_reg_WB(mem_to_reg_WB),
-
+    .mem_to_reg_WB(mem_to_reg_WB),
     .imm_ext(imm_ext), .rs1(rs1), .rs2(rs2), .rd(rd),
-
     .keyword(keyword)
 
   );
 
 
-
-  // Banco de registros (demo: usamos rs1/rs2/rd tal cual)
 
   wire [31:0] rdata1, rdata2, wb_data;
 
@@ -98,7 +84,7 @@ module CPU (
 
     .clk(clk),
 
-    .we(reg_write_WB),
+    .we(RF_LE),
 
     .waddr(rd),
 
@@ -116,33 +102,17 @@ module CPU (
 
 
 
-  // Cálculo de targets en ID (para timing correcto)
-
-  wire [31:0] branch_target_ID = npc_ID + (imm_ext << 2);
-
-  wire [31:0] call_target_ID = npc_ID + (imm_ext << 2);
-
-  wire [31:0] jmpl_target_ID = rdata1 + imm_ext;
-
-
-
-  // Comparación para branch_taken en ID (simplificado: comparar rdata1 y rdata2)
-
   wire branch_compare_equal = (rdata1 == rdata2);
 
-  wire branch_taken_ID = branch_EX && (branch_compare_equal == 1'b0); // bne: taken si no son iguales
+  wire branch_taken_ID = ID_Branch_Instruc && (branch_compare_equal == 1'b0);
 
 
 
-  // ID/EX: pasar operandos y señales a EX
-
-  // Empaquetamos: [EX control + rs1,rs2,rd + operandos + imm + npc_ID + targets + branch_taken]
-
-  localparam W_IDEX = 4+1+1+1+1 + 5+5+5 + 32+32+32+32+32+32+32+1; // alu_op + alu_src + branch + call + jmpl + rs1+rs2+rd + rA+rB+imm + npc_ID + branch_target + call_target + jmpl_target + branch_taken
+  localparam W_IDEX = 4+1+1+1+1 + 5+5+5 + 32+32+32+32+1+32+1+1+1;
 
   wire [W_IDEX-1:0] idex_in, idex_out;
 
-  assign idex_in = {alu_op_EX, alu_src_EX, branch_EX, call_EX, jmpl_EX, rs1, rs2, rd, rdata1, rdata2, imm_ext, npc_ID, branch_target_ID, call_target_ID, jmpl_target_ID, branch_taken_ID};
+  assign idex_in = {ID_ALU_op, alu_src_EX, ID_Branch_Instruc, call_instruc, jumpl_intruct, rs1, rs2, rd, rdata1, rdata2, imm_ext, branch_taken_ID, npc_ID, ID_Branch_Instruc, call_instruc, jumpl_intruct};
 
   PipeReg #(.W(W_IDEX)) ID_EX (.clk(clk), .reset(reset), .din(idex_in), .dout(idex_out));
 
@@ -152,41 +122,53 @@ module CPU (
 
   wire [4:0]  rs1_EXs, rs2_EXs, rd_EXs;
 
-  wire [31:0] a_EXs, b_EXs, imm_EXs, npc_EXs;
-
-  wire [31:0] branch_target_EXs, call_target_EXs, jmpl_target_EXs;
+  wire [31:0] a_EXs, b_EXs, imm_EXs;
 
   wire branch_taken_EXs;
 
-  assign {alu_op_EXs, alu_src_EXs, branch_EXs, call_EXs, jmpl_EXs, rs1_EXs, rs2_EXs, rd_EXs, a_EXs, b_EXs, imm_EXs, npc_EXs, branch_target_EXs, call_target_EXs, jmpl_target_EXs, branch_taken_EXs} = idex_out;
+  wire [31:0] npc_EXs;
+
+  wire branch_EXs_delay, call_EXs_delay, jmpl_EXs_delay;
+
+  assign {alu_op_EXs, alu_src_EXs, branch_EXs, call_EXs, jmpl_EXs, rs1_EXs, rs2_EXs, rd_EXs, a_EXs, b_EXs, imm_EXs, branch_taken_EXs, npc_EXs, branch_EXs_delay, call_EXs_delay, jmpl_EXs_delay} = idex_out;
+
+  wire [31:0] basePC_EX = npc_EXs - 32'd4;
+
+  wire [31:0] call_target_EX = basePC_EX + (imm_EXs << 2);
+
+  wire [31:0] branch_target_EX = basePC_EX + (imm_EXs << 2);
+
+  wire [31:0] jmpl_target_EX = a_EXs + imm_EXs;
+
+  wire take_ctrl_EX = (jmpl_EXs) ? 1'b1 : ((call_EXs) ? 1'b1 : (branch_taken_EXs));
+
+  wire [31:0] targetPC_EX = (jmpl_EXs) ? jmpl_target_EX : ((call_EXs) ? call_target_EX : branch_target_EX);
+
+  reg take_ctrl_r;
+  reg [31:0] targetPC_r;
+  wire [31:0] npc_plus4 = npc_cur + 32'd4;
+  wire delay_slot_in_EX = (jmpl_EXs_delay || call_EXs_delay || branch_EXs_delay);
+
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      pc_cur <= 32'd0;
+      npc_cur <= 32'd4;
+      take_ctrl_r <= 1'b0;
+      targetPC_r <= 32'd0;
+    end else begin
+      pc_cur <= npc_cur;
+      if (delay_slot_in_EX) begin
+        npc_cur <= npc_plus4;
+      end else begin
+        npc_cur <= take_ctrl_r ? targetPC_r : npc_plus4;
+      end
+      take_ctrl_r <= take_ctrl_EX;
+      targetPC_r <= targetPC_EX;
+    end
+  end
 
 
 
-  // Selección de próximo PC con prioridades: jmpl > call > branch_taken > pc+4
-
-  // Usamos las señales de ID para calcular el PC del siguiente ciclo
-
-  // (Las señales de EX están un ciclo tarde, así que usamos las de ID directamente)
-
-  wire [31:0] pc_target =
-
-    jmpl_EX  ? jmpl_target_ID :
-
-    call_EX  ? call_target_ID :
-
-    branch_taken_ID ? branch_target_ID :
-
-    pc_plus4;
-
-
-
-  // Selección de próximo PC vía MUX (S como override manual, última prioridad)
-
-  Mux2 #(32) pc_mux (.a(pc_target), .b(32'd0 /*alternativa demo*/), .s(S), .y(pc_next_mux));
-
-
-
-  // ALU operandos
 
   wire [31:0] alu_b = alu_src_EXs ? imm_EXs : b_EXs;
 
@@ -198,10 +180,7 @@ module CPU (
 
 
 
-
-  // EX/MEM
-
-  localparam W_EXMEM = 32+1+1+5+32; // alu_y + mem_read + mem_write + rd + b_EXs (para stores)
+  localparam W_EXMEM = 32+1+1+5+32;
 
   wire [W_EXMEM-1:0] exmem_in, exmem_out;
 
@@ -215,23 +194,17 @@ module CPU (
 
   assign {addr_MEM, mem_read_MEMs, mem_write_MEMs, rd_MEMs, store_data_MEMs} = exmem_out;
 
-
-
-  // MEM stage
-
   wire [31:0] mem_rdata;
 
   D_MEM dmem (.clk(clk), .mem_read(mem_read_MEMs), .mem_write(mem_write_MEMs), .addr(addr_MEM), .wdata(store_data_MEMs), .rdata(mem_rdata));
 
 
 
-  // MEM/WB
-
-  localparam W_MEMWB = 32+32+1+1+5; // alu_y + mem_rdata + reg_write + mem_to_reg + rd
+  localparam W_MEMWB = 32+32+1+1+5;
 
   wire [W_MEMWB-1:0] memwb_in, memwb_out;
 
-  assign memwb_in = {addr_MEM, mem_rdata, reg_write_WB, mem_to_reg_WB, rd_MEMs};
+  assign memwb_in = {addr_MEM, mem_rdata, RF_LE, mem_to_reg_WB, rd_MEMs};
 
   PipeReg #(.W(W_MEMWB)) MEM_WB (.clk(clk), .reset(reset), .din(memwb_in), .dout(memwb_out));
 
@@ -245,14 +218,6 @@ module CPU (
 
 
 
-  // ---- Impresiones por ciclo (según requisito) ----
-
-  // Línea 1: keyword, PC, nPC, señales de salida de la Unidad de Control (binario "plano")
-
-  // Luego: EX, MEM, WB en líneas sucesivas (binario)
-
-  // Nota: imprimimos señales del ciclo "ID" actual (control) y las que fluyen (EX/MEM/WB)
-
   always @(posedge clk) if (!reset) begin
 
     $write("INST=");
@@ -261,9 +226,9 @@ module CPU (
 
     $write("  PC=%0d  nPC=%0d  CTRL(ID): ", pc_cur, npc_cur);
 
-    $display("ALUop=%b ALUSrc=%b BR=%b CALL=%b JMPL=%b MemR=%b MemW=%b RegW=%b M2R=%b",
+    $display("call_instruc=%b SOH_S=%b ID_Branch_Instruc=%b ID_ALU_op=%b ID_load_intruc=%b RF_LE=%b RAM_Size=%b RAM_R_W=%b RAM_Enable=%b jumpl_intruct=%b PSR_Enable=%b Load_Call_jmpl=%b target_sel=%b",
 
-      alu_op_EX, alu_src_EX, branch_EX, call_EX, jmpl_EX, mem_read_MEM, mem_write_MEM, reg_write_WB, mem_to_reg_WB);
+      call_instruc, SOH_S, ID_Branch_Instruc, ID_ALU_op, ID_load_intruc, RF_LE, RAM_Size, RAM_R_W, RAM_Enable, jumpl_intruct, PSR_Enable, Load_Call_jmpl, target_sel);
 
 
 
@@ -276,4 +241,3 @@ module CPU (
   end
 
 endmodule
-

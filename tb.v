@@ -56,11 +56,9 @@ module TB;
 
   initial begin
 
-    // opcional: volcado VCD
-
-    $dumpfile("wave.vcd");
-
-    $dumpvars(0, TB);
+    // opcional: volcado VCD (comentado si no se necesita visualización)
+    // $dumpfile("wave.vcd");
+    // $dumpvars(0, TB);
 
     #48 $finish;
 

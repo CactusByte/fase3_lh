@@ -1,5 +1,3 @@
-// mux2.v
-
 module Mux2 #(parameter W=32) (
 
   input  wire [W-1:0] a,
@@ -15,4 +13,3 @@ module Mux2 #(parameter W=32) (
   assign y = s ? b : a;
 
 endmodule
-

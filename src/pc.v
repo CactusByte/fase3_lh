@@ -1,12 +1,10 @@
-// pc.v
-
 module PC (
 
   input  wire        clk,
 
-  input  wire        reset,   // sincrónico
+  input  wire        reset,
 
-  input  wire        le,      // load enable
+  input  wire        le,
 
   input  wire [31:0] next_pc,
 
@@ -23,4 +21,3 @@ module PC (
   end
 
 endmodule
-

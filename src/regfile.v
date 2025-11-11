@@ -1,5 +1,3 @@
-// regfile.v
-
 module RegFile (
 
   input  wire        clk,
@@ -34,8 +32,6 @@ module RegFile (
 
 
 
-  // r0/g0 = 0 (ignora escrituras a 0)
-
   always @(posedge clk) begin
 
     if (we && (waddr != 5'd0))
@@ -51,4 +47,3 @@ module RegFile (
   assign rdata2 = (raddr2 == 5'd0) ? 32'd0 : regs[raddr2];
 
 endmodule
-
