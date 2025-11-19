@@ -44,6 +44,10 @@ module CPU (
   wire [31:0] npc_ID  = ifid_out[63:32];
 
   wire [31:0] instr_ID= ifid_out[31:0];
+  
+  wire [31:0] pc_ID = npc_ID - 32'd4;
+  wire [31:0] pc_IFID = pc_ID;
+  wire [31:0] I_IFID = instr_ID;
 
 
 
@@ -131,11 +135,11 @@ module CPU (
 
 
 
-  localparam W_IDEX = 4+1+1+1+1 + 5+5+5 + 32+32+32+32+1+32+1+1+1;
+  localparam W_IDEX = 1+4+4+2+1+1+2+1+1+32 + 1+1+1+1 + 5+5+5 + 32+32+32+32+1+32+1+1+1;
 
   wire [W_IDEX-1:0] idex_in, idex_out;
 
-  assign idex_in = {ID_ALU_op, alu_src_EX, ID_Branch_Instruc, call_instruc, jumpl_intruct, rs1, rs2, rd, rdata1, rdata2, imm_ext, branch_taken_ID, npc_ID, ID_Branch_Instruc, call_instruc, jumpl_intruct};
+  assign idex_in = {call_instruc, SOH_S, ID_ALU_op, RAM_Size, RAM_Enable, RAM_R_W, Load_Call_jmpl, RF_LE, jumpl_intruct, pc_ID, alu_src_EX, ID_Branch_Instruc, branch_taken_ID, npc_ID, rs1, rs2, rd, rdata1, rdata2, imm_ext, ID_Branch_Instruc, call_instruc, jumpl_intruct};
 
   PipeReg #(.W(W_IDEX)) ID_EX (.clk(clk), .reset(reset), .din(idex_in), .dout(idex_out));
 
@@ -153,7 +157,19 @@ module CPU (
 
   wire branch_EXs_delay, call_EXs_delay, jmpl_EXs_delay;
 
-  assign {alu_op_EXs, alu_src_EXs, branch_EXs, call_EXs, jmpl_EXs, rs1_EXs, rs2_EXs, rd_EXs, a_EXs, b_EXs, imm_EXs, branch_taken_EXs, npc_EXs, branch_EXs_delay, call_EXs_delay, jmpl_EXs_delay} = idex_out;
+  wire call_IDEX, jmpl_IDEX;
+  wire [3:0] SOH_OP_IDEX;
+  wire [3:0] ALU_OP_IDEX;
+  wire [1:0] RAM_Size_IDEX;
+  wire RAM_E_IDEX, RAM_RW_IDEX;
+  wire [1:0] L_IDEX;
+  wire RF_LE_IDEX;
+  wire [31:0] PC_IDEX;
+
+  assign {call_IDEX, SOH_OP_IDEX, ALU_OP_IDEX, RAM_Size_IDEX, RAM_E_IDEX, RAM_RW_IDEX, L_IDEX, RF_LE_IDEX, jmpl_IDEX, PC_IDEX, alu_op_EXs, alu_src_EXs, branch_EXs, branch_taken_EXs, npc_EXs, rs1_EXs, rs2_EXs, rd_EXs, a_EXs, b_EXs, imm_EXs, branch_EXs_delay, call_EXs_delay, jmpl_EXs_delay} = idex_out;
+  
+  assign call_EXs = call_IDEX;
+  assign jmpl_EXs = jmpl_IDEX;
 
   wire [31:0] basePC_EX = npc_EXs - 32'd4;
   wire [31:0] pc_EXs = basePC_EX;
@@ -167,8 +183,6 @@ module CPU (
   wire take_ctrl_EX = (jmpl_EXs) ? 1'b1 : ((call_EXs) ? 1'b1 : (branch_taken_EXs));
 
   wire [31:0] targetPC_EX = (jmpl_EXs) ? jmpl_target_EX : ((call_EXs) ? call_target_EX : branch_target_EX);
-
-  wire [31:0] pc_ID = npc_ID - 32'd4;
 
   always @(posedge clk or posedge reset) begin
     if (reset) begin
@@ -256,19 +270,23 @@ module CPU (
 
 
 
-  localparam W_EXMEM = 32+1+1+5+32;
+  localparam W_EXMEM = 32+1+1+5+32 + 2+1+1+2+1;
 
   wire [W_EXMEM-1:0] exmem_in, exmem_out;
 
-  assign exmem_in = {alu_y, mem_read_MEM, mem_write_MEM, rd_EXs, b_EXs};
+  assign exmem_in = {alu_y, mem_read_MEM, mem_write_MEM, rd_EXs, b_EXs, RAM_Size_IDEX, RAM_RW_IDEX, RAM_E_IDEX, L_IDEX, RF_LE_IDEX};
 
   PipeReg #(.W(W_EXMEM)) EX_MEM (.clk(clk), .reset(reset), .din(exmem_in), .dout(exmem_out));
 
 
 
   wire [31:0] addr_MEM; wire mem_read_MEMs, mem_write_MEMs; wire [4:0] rd_MEMs; wire [31:0] store_data_MEMs;
+  wire [1:0] RAM_Size_EXMEM;
+  wire RAM_RW_EXMEM, RAM_E_EXMEM;
+  wire [1:0] L_EXMEM;
+  wire RF_LE_EXMEM;
 
-  assign {addr_MEM, mem_read_MEMs, mem_write_MEMs, rd_MEMs, store_data_MEMs} = exmem_out;
+  assign {addr_MEM, mem_read_MEMs, mem_write_MEMs, rd_MEMs, store_data_MEMs, RAM_Size_EXMEM, RAM_RW_EXMEM, RAM_E_EXMEM, L_EXMEM, RF_LE_EXMEM} = exmem_out;
 
   wire [31:0] mem_rdata;
 
@@ -276,17 +294,18 @@ module CPU (
 
 
 
-  localparam W_MEMWB = 32+32+1+1+5;
+  localparam W_MEMWB = 32+32+1+1+5 + 1;
 
   wire [W_MEMWB-1:0] memwb_in, memwb_out;
 
-  assign memwb_in = {addr_MEM, mem_rdata, RF_LE, mem_to_reg_WB, rd_MEMs};
+  assign memwb_in = {addr_MEM, mem_rdata, RF_LE, mem_to_reg_WB, rd_MEMs, RF_LE_EXMEM};
 
   PipeReg #(.W(W_MEMWB)) MEM_WB (.clk(clk), .reset(reset), .din(memwb_in), .dout(memwb_out));
 
 
 
-  assign {alu_y_WB, mem_rdata_WB, reg_write_WBs, mem_to_reg_WBs, rd_WBs} = memwb_out;
+  wire RF_E_MEMWB;
+  assign {alu_y_WB, mem_rdata_WB, reg_write_WBs, mem_to_reg_WBs, rd_WBs, RF_E_MEMWB} = memwb_out;
 
   wire wb_norm_RegWrite = reg_write_WBs;
   wire [4:0] wb_norm_rd = rd_WBs;

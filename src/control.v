@@ -98,7 +98,7 @@ module Control (
 
         ID_ALU_op     = 4'd0;
 
-        SOH_S         = 4'd0;
+        SOH_S         = 4'b1000;
 
         alu_src_EX    = 1'b0;
 
@@ -116,7 +116,7 @@ module Control (
 
         ID_ALU_op     = 4'd1;
 
-        SOH_S         = 4'd1;
+        SOH_S         = 4'b1000;
 
         alu_src_EX    = 1'b1;
 
@@ -134,7 +134,7 @@ module Control (
 
         ID_ALU_op     = 4'd0;
 
-        SOH_S         = 4'd1;
+        SOH_S         = 4'b0100;
 
         alu_src_EX    = 1'b1;
 
@@ -162,7 +162,7 @@ module Control (
 
         ID_ALU_op     = 4'd0;
 
-        SOH_S         = 4'd1;
+        SOH_S         = 4'b0000;
 
         alu_src_EX    = 1'b1;
 
