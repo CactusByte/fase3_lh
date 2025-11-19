@@ -59,7 +59,6 @@ module CPU (
   wire        LE = 1'b1;
 
   wire        alu_src_EX;
-  wire        mem_read_MEM, mem_write_MEM;
   wire        mem_to_reg_WB;
   wire [31:0] imm_ext;
   wire [4:0]  rs1, rs2, rd;
@@ -88,7 +87,6 @@ module CPU (
     .target_sel(target_sel),
 
     .alu_src_EX(alu_src_EX),
-    .mem_read_MEM(mem_read_MEM), .mem_write_MEM(mem_write_MEM),
     .mem_to_reg_WB(mem_to_reg_WB),
     .imm_ext(imm_ext), .rs1(rs1), .rs2(rs2), .rd(rd),
     .keyword(keyword)
@@ -135,41 +133,90 @@ module CPU (
 
 
 
-  localparam W_IDEX = 1+4+4+2+1+1+2+1+1+32 + 1+1+1+1 + 5+5+5 + 32+32+32+32+1+32+1+1+1;
+  // -------------------- ID/EX --------------------
+  localparam W_IDEX =
+      1  + // call_instruc
+      1  + // jumpl_intruct
+      4  + // ID_ALU_op
+      1  + // alu_src_EX
+      1  + // ID_Branch_Instruc
+      1  + // branch_taken_ID
+      32 + // npc_ID
+      5  + // rs1
+      5  + // rs2
+      5  + // rd
+      32 + // rdata1
+      32 + // rdata2
+      32 + // imm_ext
+      2  + // RAM_Size
+      1  + // RAM_Enable
+      1  + // RAM_R_W
+      2  + // Load_Call_jmpl
+      1;   // RF_LE
 
   wire [W_IDEX-1:0] idex_in, idex_out;
 
-  assign idex_in = {call_instruc, SOH_S, ID_ALU_op, RAM_Size, RAM_Enable, RAM_R_W, Load_Call_jmpl, RF_LE, jumpl_intruct, pc_ID, alu_src_EX, ID_Branch_Instruc, branch_taken_ID, npc_ID, rs1, rs2, rd, rdata1, rdata2, imm_ext, ID_Branch_Instruc, call_instruc, jumpl_intruct};
+  assign idex_in = {
+    call_instruc,       // [W-1]
+    jumpl_intruct,
+    ID_ALU_op,
+    alu_src_EX,
+    ID_Branch_Instruc,
+    branch_taken_ID,
+    npc_ID,
+    rs1,
+    rs2,
+    rd,
+    rdata1,
+    rdata2,
+    imm_ext,
+    RAM_Size,
+    RAM_Enable,
+    RAM_R_W,
+    Load_Call_jmpl,
+    RF_LE              // [0]
+  };
 
-  PipeReg #(.W(W_IDEX)) ID_EX (.clk(clk), .reset(reset), .din(idex_in), .dout(idex_out));
+  PipeReg #(.W(W_IDEX)) ID_EX (
+    .clk(clk),
+    .reset(reset),
+    .din(idex_in),
+    .dout(idex_out)
+  );
 
-
-
-  wire [3:0]  alu_op_EXs; wire alu_src_EXs, branch_EXs, call_EXs, jmpl_EXs;
-
-  wire [4:0]  rs1_EXs, rs2_EXs, rd_EXs;
-
-  wire [31:0] a_EXs, b_EXs, imm_EXs;
-
-  wire branch_taken_EXs;
-
+  // Señales en EX
+  wire        call_EXs, jmpl_EXs;
+  wire [3:0]  alu_op_EXs;
+  wire        alu_src_EXs;
+  wire        branch_EXs, branch_taken_EXs;
   wire [31:0] npc_EXs;
+  wire [4:0]  rs1_EXs, rs2_EXs, rd_EXs;
+  wire [31:0] a_EXs, b_EXs, imm_EXs;
+  wire [1:0]  RAM_Size_IDEX;
+  wire        RAM_E_IDEX, RAM_RW_IDEX;
+  wire [1:0]  L_IDEX;
+  wire        RF_LE_IDEX;
 
-  wire branch_EXs_delay, call_EXs_delay, jmpl_EXs_delay;
-
-  wire call_IDEX, jmpl_IDEX;
-  wire [3:0] SOH_OP_IDEX;
-  wire [3:0] ALU_OP_IDEX;
-  wire [1:0] RAM_Size_IDEX;
-  wire RAM_E_IDEX, RAM_RW_IDEX;
-  wire [1:0] L_IDEX;
-  wire RF_LE_IDEX;
-  wire [31:0] PC_IDEX;
-
-  assign {call_IDEX, SOH_OP_IDEX, ALU_OP_IDEX, RAM_Size_IDEX, RAM_E_IDEX, RAM_RW_IDEX, L_IDEX, RF_LE_IDEX, jmpl_IDEX, PC_IDEX, alu_op_EXs, alu_src_EXs, branch_EXs, branch_taken_EXs, npc_EXs, rs1_EXs, rs2_EXs, rd_EXs, a_EXs, b_EXs, imm_EXs, branch_EXs_delay, call_EXs_delay, jmpl_EXs_delay} = idex_out;
-  
-  assign call_EXs = call_IDEX;
-  assign jmpl_EXs = jmpl_IDEX;
+  assign {
+    call_EXs,
+    jmpl_EXs,
+    alu_op_EXs,
+    alu_src_EXs,
+    branch_EXs,
+    branch_taken_EXs,
+    npc_EXs,
+    rs1_EXs,
+    rs2_EXs,
+    rd_EXs,
+    a_EXs,
+    b_EXs,
+    imm_EXs,
+    RAM_Size_IDEX,
+    RAM_E_IDEX,
+    RAM_RW_IDEX,
+    L_IDEX,
+    RF_LE_IDEX
+  } = idex_out;
 
   wire [31:0] basePC_EX = npc_EXs - 32'd4;
   wire [31:0] pc_EXs = basePC_EX;
@@ -237,7 +284,7 @@ module CPU (
   reg take_ctrl_r;
   reg [31:0] targetPC_r;
   wire [31:0] npc_plus4 = npc_cur + 32'd4;
-  wire delay_slot_in_EX = (jmpl_EXs_delay || call_EXs_delay || branch_EXs_delay);
+  wire delay_slot_in_EX = (jmpl_EXs || call_EXs || branch_EXs);
 
   always @(posedge clk or posedge reset) begin
     if (reset) begin
@@ -274,7 +321,10 @@ module CPU (
 
   wire [W_EXMEM-1:0] exmem_in, exmem_out;
 
-  assign exmem_in = {alu_y, mem_read_MEM, mem_write_MEM, rd_EXs, b_EXs, RAM_Size_IDEX, RAM_RW_IDEX, RAM_E_IDEX, L_IDEX, RF_LE_IDEX};
+  wire mem_read_MEM_EX = RAM_E_IDEX & ~RAM_RW_IDEX;
+  wire mem_write_MEM_EX = RAM_E_IDEX & RAM_RW_IDEX;
+  
+  assign exmem_in = {alu_y, mem_read_MEM_EX, mem_write_MEM_EX, rd_EXs, b_EXs, RAM_Size_IDEX, RAM_RW_IDEX, RAM_E_IDEX, L_IDEX, RF_LE_IDEX};
 
   PipeReg #(.W(W_EXMEM)) EX_MEM (.clk(clk), .reset(reset), .din(exmem_in), .dout(exmem_out));
 

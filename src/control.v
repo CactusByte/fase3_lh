@@ -19,8 +19,6 @@ module Control (
   output reg         target_sel,
 
   output reg         alu_src_EX,
-  output reg         mem_read_MEM,
-  output reg         mem_write_MEM,
   output reg         mem_to_reg_WB,
   output reg  [31:0] imm_ext,
   output reg  [4:0]  rs1, rs2, rd,
@@ -64,9 +62,6 @@ module Control (
 
     alu_src_EX     = 1'b0;
 
-    mem_read_MEM   = 1'b0;
-
-    mem_write_MEM  = 1'b0;
 
     mem_to_reg_WB  = 1'b0;
 
@@ -116,9 +111,9 @@ module Control (
 
         ID_ALU_op     = 4'd1;
 
-        SOH_S         = 4'b1000;
+        SOH_S         = 4'b0100;
 
-        alu_src_EX    = 1'b1;
+        alu_src_EX    = 1'b0;
 
         RF_LE         = 1'b1;
 
@@ -134,11 +129,10 @@ module Control (
 
         ID_ALU_op     = 4'd0;
 
-        SOH_S         = 4'b0100;
+        SOH_S         = 4'b0000;
 
         alu_src_EX    = 1'b1;
 
-        mem_read_MEM  = 1'b1;
 
         ID_load_intruc = 1'b1;
 
@@ -162,11 +156,10 @@ module Control (
 
         ID_ALU_op     = 4'd0;
 
-        SOH_S         = 4'b0000;
+        SOH_S         = 4'b0100;
 
         alu_src_EX    = 1'b1;
 
-        mem_write_MEM = 1'b1;
 
         RF_LE         = 1'b0;
 
@@ -212,7 +205,9 @@ module Control (
 
         keyword       = "call";
 
-        SOH_S         = 4'd0;
+        SOH_S         = 4'b0000;
+
+        ID_ALU_op     = 4'b1110;
 
         call_instruc  = 1'b1;
 
@@ -247,6 +242,10 @@ module Control (
       8'b00000000: begin
 
         keyword       = "nop";
+
+        SOH_S         = 4'b1000;
+
+        ID_ALU_op     = 4'd0;
 
       end
 
