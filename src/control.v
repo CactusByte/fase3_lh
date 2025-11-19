@@ -146,7 +146,7 @@ module Control (
 
         mem_to_reg_WB = 1'b1;
 
-        RAM_Size      = 2'b00;
+        RAM_Size      = 2'b01;
 
         RAM_R_W       = 1'b0;
 
@@ -170,7 +170,7 @@ module Control (
 
         RF_LE         = 1'b0;
 
-        RAM_Size      = 2'b00;
+        RAM_Size      = 2'b01;
 
         RAM_R_W       = 1'b1;
 
